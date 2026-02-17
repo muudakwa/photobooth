@@ -1,107 +1,144 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
-<title>Photobooth</title>
+<meta charset="UTF-8">
+<title>Photobooth Strip</title>
+
 <style>
-body {
-    font-family: Arial;
-    text-align: center;
-    background: #111;
-    color: white;
+body{
+    background:black;
+    color:white;
+    text-align:center;
+    font-family:Arial;
 }
 
-video {
-    width: 300px;
-    border-radius: 10px;
+video{
+    width:320px;
+    border-radius:15px;
 }
 
-canvas {
-    display: none;
+#countdown{
+    font-size:60px;
+    margin:10px;
 }
 
-button {
-    padding: 10px;
-    margin: 10px;
+canvas{
+    display:none;
+}
+
+#result{
+    margin-top:20px;
 }
 </style>
 </head>
+
 <body>
 
-<h2>Photobooth Website</h2>
+<h2>📸 Photobooth Strip</h2>
 
-<video id="camera" autoplay></video>
-<br>
+<video id="video" autoplay></video>
 
-<select id="jumlah">
-    <option value="3">3 Foto</option>
-    <option value="4">4 Foto</option>
-    <option value="5">5 Foto</option>
-</select>
+<div id="countdown"></div>
 
-<br>
-
-<button onclick="startCapture()">Mulai Foto</button>
+<button onclick="start()">Mulai Foto</button>
 
 <br><br>
 
-<div id="hasil"></div>
-
 <canvas id="canvas"></canvas>
 
+<img id="result" width="250">
+
+<br>
+<a id="download" style="display:none">Download</a>
+
 <script>
-let video = document.getElementById("camera");
-let canvas = document.getElementById("canvas");
-let ctx = canvas.getContext("2d");
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const countdownEl = document.getElementById("countdown");
+const resultImg = document.getElementById("result");
+const downloadLink = document.getElementById("download");
+
 let photos = [];
 
-navigator.mediaDevices.getUserMedia({ video: true })
-.then(stream => {
-    video.srcObject = stream;
-});
+navigator.mediaDevices.getUserMedia({video:true})
+.then(stream => video.srcObject = stream);
 
-function startCapture() {
+function start(){
     photos = [];
-    let total = document.getElementById("jumlah").value;
-    capturePhoto(0, total);
+    ambilFoto(0);
 }
 
-function capturePhoto(index, total) {
-    canvas.width = 300;
-    canvas.height = 300;
-    ctx.drawImage(video, 0, 0, 300, 300);
-    
-    photos.push(canvas.toDataURL());
+function ambilFoto(index){
 
-    if (index + 1 < total) {
-        setTimeout(() => capturePhoto(index + 1, total), 1500);
-    } else {
-        createStrip();
+    if(index >= 3){
+        gabungStrip();
+        return;
     }
+
+    let count = 3;
+    countdownEl.innerText = count;
+
+    let timer = setInterval(()=>{
+        count--;
+        countdownEl.innerText = count;
+
+        if(count == 0){
+            clearInterval(timer);
+            countdownEl.innerText = "";
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            ctx.drawImage(video,0,0);
+            photos.push(canvas.toDataURL());
+
+            ambilFoto(index + 1);
+        }
+
+    },1000);
 }
 
-function createStrip() {
-    let strip = document.createElement("canvas");
-    strip.width = 300;
-    strip.height = photos.length * 300;
-    let sctx = strip.getContext("2d");
+function gabungStrip(){
 
-    photos.forEach((p, i) => {
-        let img = new Image();
-        img.src = p;
-        img.onload = () => {
-            sctx.drawImage(img, 0, i * 300, 300, 300);
-        };
-    });
+    const stripCanvas = document.createElement("canvas");
+    const stripCtx = stripCanvas.getContext("2d");
 
-    setTimeout(() => {
-        let img = document.createElement("img");
-        img.src = strip.toDataURL();
-        document.getElementById("hasil").innerHTML = "";
-        document.getElementById("hasil").appendChild(img);
-    }, 1000);
+    const img = new Image();
+
+    img.onload = () => {
+
+        stripCanvas.width = img.width;
+        stripCanvas.height = img.height * photos.length;
+
+        photos.forEach((p,i)=>{
+            let im = new Image();
+            im.src = p;
+            im.onload = ()=>{
+                stripCtx.drawImage(im,0,i*img.height);
+            };
+        });
+
+        setTimeout(()=>{
+            let final = stripCanvas.toDataURL();
+
+            resultImg.src = final;
+
+            downloadLink.href = final;
+            downloadLink.download = "photobooth.png";
+            downloadLink.innerText = "Download Strip";
+            downloadLink.style.display = "block";
+
+        },1000);
+
+    };
+
+    img.src = photos[0];
 }
+
 </script>
 
 </body>
 </html>
-<!-- update -->
