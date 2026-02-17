@@ -1,144 +1,744 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<title>Photobooth Strip</title>
-
-<style>
-body{
-    background:black;
-    color:white;
-    text-align:center;
-    font-family:Arial;
-}
-
-video{
-    width:320px;
-    border-radius:15px;
-}
-
-#countdown{
-    font-size:60px;
-    margin:10px;
-}
-
-canvas{
-    display:none;
-}
-
-#result{
-    margin-top:20px;
-}
-</style>
-</head>
-
-<body>
-
-<h2>📸 Photobooth Strip</h2>
-
-<video id="video" autoplay></video>
-
-<div id="countdown"></div>
-
-<button onclick="start()">Mulai Foto</button>
-
-<br><br>
-
-<canvas id="canvas"></canvas>
-
-<img id="result" width="250">
-
-<br>
-<a id="download" style="display:none">Download</a>
-
-<script>
-
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-const countdownEl = document.getElementById("countdown");
-const resultImg = document.getElementById("result");
-const downloadLink = document.getElementById("download");
-
-let photos = [];
-
-navigator.mediaDevices.getUserMedia({video:true})
-.then(stream => video.srcObject = stream);
-
-function start(){
-    photos = [];
-    ambilFoto(0);
-}
-
-function ambilFoto(index){
-
-    if(index >= 3){
-        gabungStrip();
-        return;
-    }
-
-    let count = 3;
-    countdownEl.innerText = count;
-
-    let timer = setInterval(()=>{
-        count--;
-        countdownEl.innerText = count;
-
-        if(count == 0){
-            clearInterval(timer);
-            countdownEl.innerText = "";
-
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-
-            ctx.drawImage(video,0,0);
-            photos.push(canvas.toDataURL());
-
-            ambilFoto(index + 1);
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photobooth Web</title>
+    <style>
+        /* ============================================
+           RESET DAN BASE STYLES
+           ============================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-    },1000);
-}
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f5dc 0%, #e8e4d9 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+        }
 
-function gabungStrip(){
+        /* ============================================
+           HEADER STYLES
+           ============================================ */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
 
-    const stripCanvas = document.createElement("canvas");
-    const stripCtx = stripCanvas.getContext("2d");
+        .header h1 {
+            font-size: 2.5rem;
+            color: #5a5a5a;
+            margin-bottom: 10px;
+            font-weight: 300;
+            letter-spacing: 3px;
+        }
 
-    const img = new Image();
+        .header p {
+            color: #888;
+            font-size: 1rem;
+        }
 
-    img.onload = () => {
+        /* ============================================
+           CONTAINER UTAMA
+           ============================================ */
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
 
-        stripCanvas.width = img.width;
-        stripCanvas.height = img.height * photos.length;
+        /* ============================================
+           AREA KAMERA
+           ============================================ */
+        .camera-section {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
 
-        photos.forEach((p,i)=>{
-            let im = new Image();
-            im.src = p;
-            im.onload = ()=>{
-                stripCtx.drawImage(im,0,i*img.height);
-            };
-        });
+        /* Video element untuk menampilkan stream kamera */
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none; /* Hidden sampai kamera aktif */
+        }
 
-        setTimeout(()=>{
-            let final = stripCanvas.toDataURL();
+        /* Placeholder saat kamera belum aktif */
+        .camera-placeholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
 
-            resultImg.src = final;
+        .camera-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+            opacity: 0.8;
+        }
 
-            downloadLink.href = final;
-            downloadLink.download = "photobooth.png";
-            downloadLink.innerText = "Download Strip";
-            downloadLink.style.display = "block";
+        /* ============================================
+           COUNTDOWN OVERLAY
+           ============================================ */
+        .countdown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
 
-        },1000);
+        .countdown-number {
+            font-size: 8rem;
+            color: white;
+            font-weight: bold;
+            animation: pulse 1s ease-in-out;
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+        }
 
-    };
+        @keyframes pulse {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
 
-    img.src = photos[0];
-}
+        /* Flash effect saat foto diambil */
+        .flash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 20;
+        }
 
-</script>
+        .flash.active {
+            animation: flashAnim 0.3s ease-out;
+        }
 
+        @keyframes flashAnim {
+            0% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+
+        /* ============================================
+           HASIL PHOTOBOOTH STRIP
+           ============================================ */
+        .result-section {
+            display: none; /* Hidden sampai foto selesai */
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Frame photobooth strip */
+        .photobooth-strip {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+            max-width: 300px;
+        }
+
+        /* Container untuk 3 foto */
+        .photos-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Setiap foto dalam strip */
+        .strip-photo {
+            width: 100%;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+            border-radius: 5px;
+            background: #f0f0f0;
+        }
+
+        /* Tulisan di bawah strip */
+        .strip-footer {
+            text-align: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 2px dashed #ddd;
+        }
+
+        .strip-footer h3 {
+            font-size: 1.2rem;
+            color: #666;
+            font-weight: 600;
+            letter-spacing: 2px;
+        }
+
+        .strip-footer p {
+            font-size: 0.8rem;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        /* ============================================
+           TOMBOL STYLES
+           ============================================ */
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #666;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(17, 153, 142, 0.6);
+        }
+
+        /* Disabled state */
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* ============================================
+           STATUS TEXT
+           ============================================ */
+        .status-text {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: #666;
+            min-height: 20px;
+        }
+
+        /* ============================================
+           RESPONSIVE DESIGN
+           ============================================ */
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .container {
+                padding: 20px;
+            }
+
+            .countdown-number {
+                font-size: 6rem;
+            }
+
+            .btn {
+                padding: 12px 24px;
+                font-size: 0.9rem;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .button-group {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .photobooth-strip {
+                max-width: 250px;
+                padding: 15px;
+            }
+        }
+
+        /* ============================================
+           UTILITY CLASSES
+           ============================================ */
+        .hidden {
+            display: none !important;
+        }
+
+        .flex {
+            display: flex;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header aplikasi -->
+    <div class="header">
+        <h1>📸 PHOTOBOOTH</h1>
+        <p>Ambil 3 foto seru dalam satu strip!</p>
+    </div>
+
+    <!-- Container utama -->
+    <div class="container">
+        
+        <!-- SECTION 1: AREA KAMERA -->
+        <div class="camera-section" id="cameraSection">
+            
+            <!-- Placeholder sebelum kamera aktif -->
+            <div class="camera-placeholder" id="placeholder">
+                <div class="camera-icon">📷</div>
+                <p>Klik "Start Photobooth" untuk memulai</p>
+            </div>
+
+            <!-- Video element untuk stream kamera -->
+            <video id="video" autoplay playsinline></video>
+            
+            <!-- Flash effect element -->
+            <div class="flash" id="flash"></div>
+            
+            <!-- Countdown overlay -->
+            <div class="countdown-overlay" id="countdownOverlay">
+                <div class="countdown-number" id="countdownNumber">3</div>
+            </div>
+        </div>
+
+        <!-- Status text untuk informasi proses -->
+        <div class="status-text" id="statusText">Siap memulai sesi foto!</div>
+
+        <!-- Tombol kontrol -->
+        <div class="button-group" id="controlButtons">
+            <button class="btn btn-primary" id="startBtn" onclick="startPhotobooth()">
+                <span>▶️</span> Start Photobooth
+            </button>
+        </div>
+
+        <!-- SECTION 2: HASIL PHOTOBOOTH STRIP -->
+        <div class="result-section" id="resultSection">
+            
+            <!-- Frame photobooth dengan 3 foto -->
+            <div class="photobooth-strip" id="photoboothStrip">
+                <div class="photos-container" id="photosContainer">
+                    <!-- Foto akan ditampilkan di sini oleh JavaScript -->
+                </div>
+                <div class="strip-footer">
+                    <h3>PHOTOBOOTH WEB</h3>
+                    <p id="dateText"></p>
+                </div>
+            </div>
+
+            <!-- Tombol aksi setelah foto selesai -->
+            <div class="button-group">
+                <button class="btn btn-success" id="downloadBtn" onclick="downloadStrip()">
+                    <span>💾</span> Download Strip
+                </button>
+                <button class="btn btn-secondary" onclick="resetPhotobooth()">
+                    <span>🔄</span> Ulangi Foto
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Canvas tersembunyi untuk memproses foto (tidak ditampilkan ke user) -->
+    <canvas id="captureCanvas" style="display: none;"></canvas>
+    
+    <!-- Canvas untuk menggabungkan 3 foto menjadi satu strip -->
+    <canvas id="stripCanvas" style="display: none;"></canvas>
+
+    <script>
+        // ============================================
+        // VARIABLES GLOBAL
+        // ============================================
+        
+        // Elemen DOM yang sering digunakan
+        const video = document.getElementById('video');
+        const placeholder = document.getElementById('placeholder');
+        const startBtn = document.getElementById('startBtn');
+        const controlButtons = document.getElementById('controlButtons');
+        const resultSection = document.getElementById('resultSection');
+        const cameraSection = document.getElementById('cameraSection');
+        const countdownOverlay = document.getElementById('countdownOverlay');
+        const countdownNumber = document.getElementById('countdownNumber');
+        const flash = document.getElementById('flash');
+        const statusText = document.getElementById('statusText');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const stripCanvas = document.getElementById('stripCanvas');
+        const photosContainer = document.getElementById('photosContainer');
+        const dateText = document.getElementById('dateText');
+
+        // State aplikasi
+        let stream = null;          // Menyimpan stream kamera
+        let capturedPhotos = [];    // Array untuk menyimpan 3 foto
+        let isCapturing = false;    // Flag untuk mencegah double-click
+
+        // ============================================
+        // FUNGSI UTAMA: MEMULAI PHOTOBOOTH
+        // ============================================
+        
+        async function startPhotobooth() {
+            // Cegah klik berulang kali
+            if (isCapturing) return;
+            isCapturing = true;
+
+            try {
+                // 1. Minta akses kamera ke browser
+                statusText.textContent = "Mengakses kamera...";
+                
+                // getUserMedia API untuk mengakses kamera
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user',  // Gunakan kamera depan (selfie)
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }, 
+                    audio: false  // Tidak perlu audio untuk photobooth
+                });
+
+                // 2. Hubungkan stream ke video element
+                video.srcObject = stream;
+                video.style.display = 'block';
+                placeholder.style.display = 'none';
+                startBtn.style.display = 'none';
+
+                // Tunggu video siap
+                video.onloadedmetadata = () => {
+                    statusText.textContent = "Kamera siap! Memulai countdown...";
+                    // Tunggu sebentar lalu mulai capture
+                    setTimeout(() => {
+                        startAutoCapture();
+                    }, 1000);
+                };
+
+            } catch (err) {
+                // Handle error jika user menolak izin kamera
+                console.error('Error accessing camera:', err);
+                statusText.textContent = "❌ Gagal mengakses kamera. Pastikan izin diberikan.";
+                isCapturing = false;
+            }
+        }
+
+        // ============================================
+        // FUNGSI: AUTO CAPTURE 3 FOTO
+        // ============================================
+        
+        async function startAutoCapture() {
+            capturedPhotos = []; // Reset array foto
+            
+            // Loop untuk mengambil 3 foto
+            for (let i = 0; i < 3; i++) {
+                statusText.textContent = `Foto ${i + 1} dari 3...`;
+                
+                // Tunggu countdown 3 detik sebelum ambil foto
+                await runCountdown();
+                
+                // Ambil foto
+                const photoData = capturePhoto();
+                capturedPhotos.push(photoData);
+                
+                // Tunggu sebentar sebelum foto berikutnya
+                if (i < 2) {
+                    await wait(500); // Jeda 0.5 detik antar foto
+                }
+            }
+
+            // Semua foto selesai diambil
+            finishCapture();
+        }
+
+        // ============================================
+        // FUNGSI: COUNTDOWN TIMER
+        // ============================================
+        
+        function runCountdown() {
+            return new Promise((resolve) => {
+                let count = 3; // Mulai dari 3
+                
+                // Tampilkan overlay countdown
+                countdownOverlay.style.display = 'flex';
+                countdownNumber.textContent = count;
+
+                // Interval untuk update angka setiap 1 detik
+                const interval = setInterval(() => {
+                    count--;
+                    
+                    if (count > 0) {
+                        // Update angka countdown
+                        countdownNumber.textContent = count;
+                        // Restart animasi
+                        countdownNumber.style.animation = 'none';
+                        setTimeout(() => {
+                            countdownNumber.style.animation = 'pulse 1s ease-in-out';
+                        }, 10);
+                    } else {
+                        // Countdown selesai, ambil foto!
+                        clearInterval(interval);
+                        countdownOverlay.style.display = 'none';
+                        triggerFlash();
+                        resolve(); // Lanjut ke proses capture
+                    }
+                }, 1000);
+            });
+        }
+
+        // ============================================
+        // FUNGSI: CAPTURE FOTO DARI VIDEO
+        // ============================================
+        
+        function capturePhoto() {
+            const ctx = captureCanvas.getContext('2d');
+            
+            // Set ukuran canvas sama dengan ukuran video
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            
+            // Gambar frame video ke canvas (ini yang menangkap fotonya)
+            ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Convert canvas ke data URL (format PNG)
+            return captureCanvas.toDataURL('image/png');
+        }
+
+        // ============================================
+        // FUNGSI: FLASH EFFECT
+        // ============================================
+        
+        function triggerFlash() {
+            // Tambahkan class untuk animasi flash
+            flash.classList.add('active');
+            
+            // Hapus class setelah animasi selesai
+            setTimeout(() => {
+                flash.classList.remove('active');
+            }, 300);
+        }
+
+        // ============================================
+        // FUNGSI: SELESAI CAPTURE, TAMPILKAN HASIL
+        // ============================================
+        
+        function finishCapture() {
+            // Matikan kamera untuk menghemat baterai
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.style.display = 'none';
+                placeholder.style.display = 'flex';
+            }
+
+            // Sembunyikan area kamera, tampilkan hasil
+            cameraSection.style.display = 'none';
+            controlButtons.style.display = 'none';
+            resultSection.style.display = 'flex';
+            resultSection.style.flexDirection = 'column';
+            resultSection.style.alignItems = 'center';
+
+            // Tampilkan 3 foto di container
+            displayPhotosInStrip();
+            
+            // Set tanggal di footer strip
+            const now = new Date();
+            dateText.textContent = now.toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
+
+            statusText.textContent = "✅ Sesu foto selesai! Silakan download atau ulangi.";
+        }
+
+        // ============================================
+        // FUNGSI: TAMPILKAN FOTO DI STRIP
+        // ============================================
+        
+        function displayPhotosInStrip() {
+            // Kosongkan container
+            photosContainer.innerHTML = '';
+            
+            // Buat element img untuk setiap foto
+            capturedPhotos.forEach((photoData, index) => {
+                const img = document.createElement('img');
+                img.src = photoData;
+                img.className = 'strip-photo';
+                img.alt = `Foto ${index + 1}`;
+                photosContainer.appendChild(img);
+            });
+        }
+
+        // ============================================
+        // FUNGSI: DOWNLOAD STRIP SEBAGAI PNG
+        // ============================================
+        
+        function downloadStrip() {
+            // Buat canvas baru untuk menggabungkan 3 foto secara vertikal
+            const ctx = stripCanvas.getContext('2d');
+            
+            // Ukuran setiap foto dalam strip
+            const photoWidth = 400;
+            const photoHeight = 300;
+            const padding = 20;
+            const footerHeight = 80;
+            
+            // Set ukuran total canvas
+            stripCanvas.width = photoWidth + (padding * 2);
+            stripCanvas.height = (photoHeight * 3) + (padding * 4) + footerHeight;
+            
+            // Background putih
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, stripCanvas.width, stripCanvas.height);
+            
+            // Load dan gambar setiap foto
+            let loadedCount = 0;
+            const images = [];
+            
+            capturedPhotos.forEach((photoData, index) => {
+                const img = new Image();
+                img.onload = () => {
+                    // Gambar foto dengan padding
+                    const yPos = padding + (index * (photoHeight + padding));
+                    ctx.drawImage(img, padding, yPos, photoWidth, photoHeight);
+                    
+                    // Tambah border tipis
+                    ctx.strokeStyle = '#eee';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(padding, yPos, photoWidth, photoHeight);
+                    
+                    loadedCount++;
+                    
+                    // Jika semua foto sudah digambar, tambah footer dan download
+                    if (loadedCount === 3) {
+                        drawFooterAndDownload();
+                    }
+                };
+                img.src = photoData;
+                images.push(img);
+            });
+            
+            function drawFooterAndDownload() {
+                // Gambar garis putus-putus
+                const footerY = (photoHeight * 3) + (padding * 4);
+                ctx.beginPath();
+                ctx.setLineDash([10, 5]);
+                ctx.moveTo(padding, footerY - 20);
+                ctx.lineTo(stripCanvas.width - padding, footerY - 20);
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Tulisan footer
+                ctx.fillStyle = '#666';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('PHOTOBOOTH WEB', stripCanvas.width / 2, footerY + 10);
+                
+                ctx.fillStyle = '#999';
+                ctx.font = '14px Arial';
+                ctx.fillText(dateText.textContent, stripCanvas.width / 2, footerY + 35);
+                
+                // Download
+                const link = document.createElement('a');
+                link.download = `photobooth-${Date.now()}.png`;
+                link.href = stripCanvas.toDataURL('image/png');
+                link.click();
+                
+                statusText.textContent = "✅ Strip berhasil di-download!";
+            }
+        }
+
+        // ============================================
+        // FUNGSI: RESET DAN ULANGI
+        // ============================================
+        
+        function resetPhotobooth() {
+            // Reset state
+            isCapturing = false;
+            capturedPhotos = [];
+            
+            // Tampilkan kembali area kamera
+            cameraSection.style.display = 'block';
+            resultSection.style.display = 'none';
+            controlButtons.style.display = 'flex';
+            startBtn.style.display = 'flex';
+            
+            // Reset status
+            statusText.textContent = "Siap memulai sesi foto baru!";
+            
+            // Bersihkan container foto
+            photosContainer.innerHTML = '';
+        }
+
+        // ============================================
+        // FUNGSI UTILITY: WAIT
+        // ============================================
+        
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // ============================================
+        // INISIALISASI
+        // ============================================
+        
+        // Cek apakah browser mendukung getUserMedia
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            statusText.textContent = "❌ Browser tidak mendukung akses kamera.";
+            startBtn.disabled = true;
+        }
+    </script>
 </body>
 </html>
